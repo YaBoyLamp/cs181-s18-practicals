@@ -69,6 +69,7 @@
 
 import os
 from collections import Counter
+from queue import Queue
 try:
     import xml.etree.cElementTree as ET
 except ImportError:
@@ -145,10 +146,10 @@ def make_design_mat(fds, global_feat_dict=None):
     cols = []
     rows = []
     data = []        
-    for i in xrange(len(fds)):
+    for i in range(len(fds)):
         temp_cols = []
         temp_data = []
-        for feat,val in fds[i].iteritems():
+        for feat,val in fds[i].items():
             try:
                 # update temp_cols iff update temp_data
                 temp_cols.append(feat_dict[feat])
@@ -228,6 +229,75 @@ def system_call_count_feats(tree):
             c['num_system_calls'] += 1
     return c
 
+def sys_call_count_feats(tree):
+    """
+    arguments:
+      tree is an xml.etree.ElementTree object
+    returns:
+      a dictionary mapping el.tag to the number of times each system call 
+      is made by an executable (summed over all processes)
+    """
+    c = Counter()
+    in_all_section = False
+    for el in tree.iter():
+        # ignore everything outside the "all_section" element
+        if el.tag == "all_section" and not in_all_section:
+            in_all_section = True
+        elif el.tag == "all_section" and in_all_section:
+            in_all_section = False
+        elif in_all_section:
+            c[el.tag] += 1
+    return c
+
+def n_gram_sys_call_count_feats(tree):
+    c = Counter()
+    n = 3
+    in_all_section = False
+    q = Queue(maxsize = n - 1)
+    for el in tree.iter():
+        # ignore everything outside the "all_section" element
+        if el.tag == "all_section" and not in_all_section:
+            in_all_section = True
+        elif el.tag == "all_section" and in_all_section:
+            in_all_section = False
+        elif in_all_section and not q.full():
+            q.put(el.tag)
+        elif in_all_section:
+            key = "-".join([str(elt) for elt in list(q.queue)]) + "-" + el.tag
+            c[key] += 1
+            q.get()
+            q.put(el.tag)
+    return c
+
+def naive_bayes(X_train, t_train, X_test, global_feat_dict, test_features_dict, lamb_param):
+    sums = np.zeros(len(util.malware_classes))
+
+    for i in range(X_train.shape[0]):
+        sums[t_train[i]] += np.sum(X_train[i])
+    
+    prior = [3.69,1.62,1.2,1.03,1.33,1.26,1.72,1.33,52.14,.68,17.56,1.04,12.18,1.91,1.3]
+    
+    scores = np.zeros((X_test.shape[0], len(util.malware_classes)))
+    for i in range(X_test.shape[0]):
+        for j in range(X_test.shape[1]):
+            for k in range(len(util.malware_classes)):
+                scores[i][k] += np.log((X_test[(i,j)] + lamb_param) / (sums[k] + len(test_features_dict) * lamb_param))
+
+    scores = scores.T
+    for k in range(len(scores)):
+        scores[k] += np.log(prior[k] / 100) * 110
+    scores = scores.T
+
+    preds = np.argmax(scores, axis = 1)
+    print(preds[:30])
+    print(scores[:30])
+    print(preds[600:])
+
+    return preds
+
+def acc(preds, t_validate):
+    return np.sum(preds == np.array(t_validate)) / len(preds)
+
 ## The following function does the feature extraction, learning, and prediction
 def main():
     train_dir = "train"
@@ -235,38 +305,45 @@ def main():
     outputfile = "sample_predictions.csv"  # feel free to change this or take it as an argument
     
     # TODO put the names of the feature functions you've defined above in this list
-    ffs = [first_last_system_call_feats, system_call_count_feats]
+    ffs = [n_gram_sys_call_count_feats]
     
     # extract features
-    print "extracting training features..."
+    print ("extracting training features...")
     X_train,global_feat_dict,t_train,train_ids = extract_feats(ffs, train_dir)
-    print "done extracting training features"
-    print
-    
+    print ("done extracting training features")
+    print ()
+    print(global_feat_dict)
     # TODO train here, and learn your classification parameters
-    print "learning..."
+    print ("learning...")
     learned_W = np.random.random((len(global_feat_dict),len(util.malware_classes)))
-    print "done learning"
-    print
-    
+    print ("done learning")
+    print ()
     # get rid of training data and load test data
-    del X_train
-    del t_train
-    del train_ids
-    print "extracting test features..."
-    X_test,_,t_ignore,test_ids = extract_feats(ffs, test_dir, global_feat_dict=global_feat_dict)
-    print "done extracting test features"
-    print
-    
+    # del X_train
+    # del t_train
+    # del train_ids
+    print ("extracting test features...")
+    # X_test,test_features_dict,t_ignore,test_ids = extract_feats(ffs, test_dir, global_feat_dict=global_feat_dict)
+    print ("done extracting test features")
+    print ()
+    # preds_bayes = naive_bayes(X_train, t_train, X_test, global_feat_dict, test_features_dict, 1)
+    split = 2300
+    preds_bayes = naive_bayes(X_train[:split], t_train[:split], X_train[split:], global_feat_dict, global_feat_dict, 5)
+    np.savetxt("labels_ahhhh.csv", t_train)
+    print (acc(preds_bayes, t_train[split:].astype(int)))
+
     # TODO make predictions on text data and write them out
-    print "making predictions..."
-    preds = np.argmax(X_test.dot(learned_W),axis=1)
-    print "done making predictions"
-    print
+    print ("making predictions...")
+    preds = np.argmax(X_train.dot(learned_W),axis=1)
+    print (acc(preds, t_train))
+    print ("done making predictions")
+    print ()
     
-    print "writing predictions..."
-    util.write_predictions(preds, test_ids, outputfile)
-    print "done!"
+    print ("writing predictions...")
+    # util.write_predictions(preds, test_ids, outputfile)
+    print ("done!")
+    print (preds_bayes.shape)
+    print (t_train[split:].shape)
 
 if __name__ == "__main__":
     main()
