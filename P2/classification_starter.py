@@ -76,6 +76,8 @@ except ImportError:
     import xml.etree.ElementTree as ET
 import numpy as np
 from scipy import sparse
+import tensorflow as tf
+import keras
 
 import util
 
@@ -312,7 +314,6 @@ def main():
     X_train,global_feat_dict,t_train,train_ids = extract_feats(ffs, train_dir)
     print ("done extracting training features")
     print ()
-    print(global_feat_dict)
     # TODO train here, and learn your classification parameters
     print ("learning...")
     learned_W = np.random.random((len(global_feat_dict),len(util.malware_classes)))
@@ -323,15 +324,13 @@ def main():
     # del t_train
     # del train_ids
     print ("extracting test features...")
-    # X_test,test_features_dict,t_ignore,test_ids = extract_feats(ffs, test_dir, global_feat_dict=global_feat_dict)
+    X_test,_,t_ignore,test_ids = extract_feats(ffs, test_dir, global_feat_dict=global_feat_dict)
     print ("done extracting test features")
     print ()
     # preds_bayes = naive_bayes(X_train, t_train, X_test, global_feat_dict, test_features_dict, 1)
-    split = 2300
-    preds_bayes = naive_bayes(X_train[:split], t_train[:split], X_train[split:], global_feat_dict, global_feat_dict, 5)
-    np.savetxt("labels_ahhhh.csv", t_train)
-    print (acc(preds_bayes, t_train[split:].astype(int)))
-
+    # split = 2300
+    # preds_bayes = naive_bayes(X_train[:split], t_train[:split], X_train[split:], global_feat_dict, global_feat_dict, 5)
+    
     # TODO make predictions on text data and write them out
     print ("making predictions...")
     preds = np.argmax(X_train.dot(learned_W),axis=1)
@@ -342,8 +341,6 @@ def main():
     print ("writing predictions...")
     # util.write_predictions(preds, test_ids, outputfile)
     print ("done!")
-    print (preds_bayes.shape)
-    print (t_train[split:].shape)
 
 if __name__ == "__main__":
     main()
