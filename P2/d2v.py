@@ -55,10 +55,9 @@ def train_d2v(features, classes):
     for key in features:
         docs.append(analyzedDocument(features[key], [key]))
 
-    model = gensim.models.doc2vec.Doc2Vec(vector_size=300, min_count=1, epochs=100, window_size=15, sampling_threshold = 1e-5, negative_size = 5)
+    model = gensim.models.doc2vec.Doc2Vec(vector_size=200, min_count=1, epochs=100, window_size=15, sampling_threshold = 1e-5, negative_size = 5)
     model.build_vocab(docs)
     model.train(docs, total_examples=model.corpus_count, epochs=model.epochs)
-    # model=gensim.models.doc2vec.Doc2Vec(docs, size=200, window=300, min_count = 1, workers=4, train_epoch=100)
 
     return model
 
@@ -70,9 +69,8 @@ def test_d2v (model, features, classes):
     pred = {}
     for key in features:
         inferred_vector = model.infer_vector(features[key])
-        neighbors = [item[0] for item in model.docvecs.most_similar([inferred_vector], topn=len(model.docvecs))]
-        pred[key] = classes[most_common(neighbors)]
-        # pred[key] = classes[model.docvecs.most_similar([inferred_vector], topn=len(model.docvecs))[0][0]]
+        neighbors = [classes[item[0]] for item in model.docvecs.most_similar([inferred_vector], topn=5)]
+        pred[key] = most_common(neighbors)
     return pred
 
 def d2v_acc (pred, classes):
