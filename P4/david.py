@@ -5,6 +5,7 @@ import pygame as pg
 
 from SwingyMonkey import SwingyMonkey
 from collections import defaultdict
+from matplotlib import pyplot as plt
 
 class Learner(object):
     '''
@@ -19,11 +20,16 @@ class Learner(object):
         self.alpha = 0.5
         self.gamma = 0.9
         self.epsilon = 0.05
+        self.is_low_gravity = None
+        self.count = 0
+        self.epochs = 1
 
     def reset(self):
         self.last_state  = None
         self.last_action = None
         self.last_reward = None
+        self.is_low_gravity = None
+        self.epochs += 1
 
     def action_callback(self, state):
         '''
@@ -36,23 +42,51 @@ class Learner(object):
         # You'll need to select and action and return it.
         # Return 0 to swing and 1 to jump.
 
+        self.count += 1
+
         if self.last_state == None:
             self.last_action = 0
             self.last_state = state
             return 0
+        
 
-        s = (state['tree']['dist'] / 10, state['tree']['top'] / 10, state['monkey']['vel'] / 10, state['monkey']['top'] / 10)
-        self.q[(s, self.last_action)] = ((1 - self.alpha) * self.q[(s, self.last_action)]) + (self.alpha * (self.last_reward + self.gamma * max([self.q[(s,0)], self.q[(s,1)]])))
+        if self.is_low_gravity == None:
+            self.is_low_gravity = state['monkey']['vel'] == -1
 
+        ls = (self.last_state['tree']['dist'] / 50, self.last_state['tree']['top'] / 50, self.last_state['monkey']['vel'] / 10, self.last_state['monkey']['top'] / 50, self.is_low_gravity)
+        s = (state['tree']['dist'] / 50, state['tree']['top'] / 50, state['monkey']['vel'] / 10, state['monkey']['top'] / 50, self.is_low_gravity)
+        self.q[(ls, self.last_action)] = ((1 - self.alpha) * self.q[(ls, self.last_action)]) + (self.alpha * ((self.last_reward + 0.01) + self.gamma * max([self.q[(s,0)], self.q[(s,1)]])))
+
+        if state['monkey']['top'] + state['monkey']['vel'] < 0:
+            self.last_action = 1
+            self.last_state = state 
+            return 1
+        if state['monkey']['bot'] + state['monkey']['top'] > 400:
+            self.last_action = 0
+            self.last_state = state
+            return 0
+
+        if self.epochs > 1900:
+            self.epsilon = 0
         if npr.rand() < self.epsilon:
             new_action = 1 if npr.rand() < 0.1 else 0
         else:
             if self.q[(s, 0)] > self.q[(s, 1)]:
                 new_action = 0
+                # self.count += 1
             elif self.q[(s, 0)] < self.q[(s, 1)]:
                 new_action = 1
+                # self.count += 1
             else:
                 new_action = 1 if npr.rand() < 0.1 else 0
+            # else:
+            #     if state['tree']['dist'] > 0 and state['monkey']['vel'] < -20 and self.last_action != 2:
+            #         if state['monkey']['top'] < (state['tree']['top'] + state['tree']['bot'] / 2):
+            #             new_action = 1
+            #         else:
+            #             new_action = 0
+            #     else:
+            #         new_action = 1 if npr.rand() < 0.1 else 0
 
         new_state  = state
 
@@ -101,7 +135,7 @@ if __name__ == '__main__':
     hist = []
 
     # Run games. 
-    run_games(agent, hist, 2000, 0)
+    run_games(agent, hist, 1000, 0)
 
     # Save history. 
     np.save('hist',np.array(hist))
@@ -119,6 +153,17 @@ if __name__ == '__main__':
     # print 'max treemid = ', max(agent.treemids)
     # print 'max monkeyvel = ', max(agent.monkeyvels)
     # print 'min monkeyvel = ', min(agent.monkeyvels)
+    print sum([x != 0 for x in agent.q.values()])
     print len(agent.q)
+    print (agent.count)
     print max(hist)
+    # print agent.q.values()
 
+    # with open('qs.txt', 'w') as f:
+    #     for key, value in agent.q.items():
+    #         f.write('%s:%s\n' % (key, value))
+
+    plt.plot(range(1,1001), hist)
+    plt.show()
+
+    plt.hist(hist)
