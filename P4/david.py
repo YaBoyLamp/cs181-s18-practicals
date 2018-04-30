@@ -19,11 +19,10 @@ class Learner(object):
         self.q = defaultdict(lambda: 0)
         self.alpha = 0.5
         self.gamma = 0.9
-        self.epsilon = 0.05
+        self.epsilon = 0.1
         self.is_low_gravity = None
         self.count = 0
         self.epochs = 1
-        self.gravitys = []
 
     def reset(self):
         self.last_state  = None
@@ -44,6 +43,7 @@ class Learner(object):
         # Return 0 to swing and 1 to jump.
 
         self.count += 1
+        new_action = 0
 
         if self.last_state == None:
             self.last_action = 0
@@ -55,8 +55,8 @@ class Learner(object):
             self.is_low_gravity = state['monkey']['vel'] == -1
             self.gravitys.append(state['monkey']['vel'] == -1)
 
-        ls = (self.last_state['tree']['dist'] / 30, self.last_state['tree']['top'] / 30, self.last_state['monkey']['vel'] / 10, self.last_state['monkey']['top'] / 30, self.is_low_gravity)
-        s = (state['tree']['dist'] / 30, state['tree']['top'] / 30, state['monkey']['vel'] / 10, state['monkey']['top'] / 30, self.is_low_gravity)
+        ls = (self.last_state['tree']['dist'] / 60, self.last_state['tree']['top'] / 60, self.last_state['monkey']['vel'] / 10, self.last_state['monkey']['top'] / 60, self.is_low_gravity)
+        s = (state['tree']['dist'] / 60, state['tree']['top'] / 60, state['monkey']['vel'] / 10, state['monkey']['top'] / 60, self.is_low_gravity)
         self.q[(ls, self.last_action)] = ((1 - self.alpha) * self.q[(ls, self.last_action)]) + (self.alpha * ((self.last_reward) + (self.gamma * max([self.q[(s,0)], self.q[(s,1)]]))))
 
         if state['monkey']['top'] + state['monkey']['vel'] < 0:
@@ -68,8 +68,17 @@ class Learner(object):
             self.last_state = state
             return 0
 
-        if self.epochs > 1900:
+        if self.epochs > 250:
+            self.epsilon = 0.05
+        if self.epochs > 500:
+            self.epsilon = 0.025
+        if self.epochs > 900:
             self.epsilon = 0
+        if self.epochs > 500:
+            self.alpha = 0.25
+        if self.epochs > 750:
+            self.alpha = 0.1
+
         if npr.rand() < self.epsilon:
             new_action = 1 if npr.rand() < 0.1 else 0
         else:
@@ -137,7 +146,7 @@ if __name__ == '__main__':
     hist = []
 
     # Run games. 
-    run_games(agent, hist, 2000, 0)
+    run_games(agent, hist, 1000, 0)
 
     # Save history. 
     np.save('hist',np.array(hist))
@@ -159,14 +168,13 @@ if __name__ == '__main__':
     # print len(agent.q)
     print (agent.count)
     print max(hist)
-    print sum(agent.gravitys)
-    # print agent.q.values()
+    print len(agent.q)
 
     with open('scores2.txt', 'w') as f:
-        for score in xrange(2000):
+        for score in xrange(1000):
             f.write('%s:%s:%r\n' % (score, hist[score], agent.gravitys[score]))
 
-    plt.plot(range(1,2001), hist)
+    plt.plot(range(1,1001), hist)
     plt.show()
 
     plt.hist(hist)
